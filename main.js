@@ -130,7 +130,7 @@ var maxv = 5.0;        // Max Velocity
 var drag = 0.15;       // Drag
 
 if (circuit == 1) {
-    var px = 297; // Initial Position X
+    var px = 330; // Initial Position X
     var py = 376; // Initial Position Y
     var ang = 0;  // Initial Angle (Radians)
 }
@@ -163,10 +163,11 @@ ML ==========================================================================
 */
 var batch_size = 256;
 var lr = 0.001;
-var expl_rate_start = 0.5;
+var expl_rate_start = 1;
 var expl_rate_end = 0.01;
 var expl_rate_decay = 0.01;
-var episodes = 3;
+var episodes = 2;
+var max_timesteps = 100;
 var num_actions = 3;
 var memory_size = 10;
 var strategy = new EpsGreedyStrat(expl_rate_start, expl_rate_end, expl_rate_decay);
@@ -175,28 +176,72 @@ var memory = new ReplayMemory(memory_size);
 
 function game_reset() {
     if (circuit == 1) {
-        var px = 297; // Initial Position X
-        var py = 376; // Initial Position Y
-        var ang = 0;  // Initial Angle (Radians)
+        px = 330; // Initial Position X
+        py = 376; // Initial Position Y
+        ang = 0;  // Initial Angle (Radians)
     }
     else {
-        var px = W/2; // Initial Position X
-        var py = H/2; // Initial Position Y
-        var ang = 0;  // Initial Angle (Radians)
+        px = W/2; // Initial Position X
+        py = H/2; // Initial Position Y
+        ang = 0;  // Initial Angle (Radians)
     }
-    var vx = 0;       // Initial Velocity X
-    var vy = 0;       // Initial Velocity Y
+    vx = 0;       // Initial Velocity X
+    vy = 0;       // Initial Velocity Y
     if (ML) {
-        var v = maxv;     // Initial Velocity Magnitude
+        v = maxv;     // Initial Velocity Magnitude
     }
     else {
-        var v = 0;        // Initial Velocity Magnitude
+        v = 0;        // Initial Velocity Magnitude
     }
     var vang = 0;     // Initial Velocity Angle
     var throttle = 0; // Initial Throttle Boolean False
 }
 
+function do_the_thing(action) {
+    if (action == 0) { // Turn Left
+        ang -= Math.PI / turn_pi_frac;
+    }
+    else if (action == 2) { // Turn Right
+        ang += Math.PI / turn_pi_frac;
+    }
+}
+
+function get_state() {
+    var imgForTensor = ctx2.getImageData(0, horiz, W, H-horiz)
+    var tensor = tf.browser.fromPixels(imgForTensor);
+    return tf.reshape(tensor, [-1, horiz, W, 3]);
+}
+
+function carrot_stick(action) {
+    var color = ctx.getImageData(px, py, 1, 1);
+    var red = color.data[0];
+    var green = color.data[1];
+    var blue = color.data[2];
+    //console.log(red, green, blue);
+    var score = 0;
+    var endrun = 0;
+    if (red == green == blue && red > 2) {
+        score += 100; // WHITE lap
+    }
+    else if (red = 69 && green == 142 && blue > 49 && blue < 55) {
+        score -= 100; // GREEN crash
+        endrun = 1;
+    }
+    else if (red > 225 && green > 230 && blue > 35 && blue < 50) {
+        score += 10; // YELLOW waypoint
+    }
+    else if (red > 230 && green < 20 && blue < 20) {
+        score += 5; // RED hitting racing line
+    }
+    if ( action == 0 && action == 2) {
+        score -= 1; // Penalize many turns
+    }
+    
+    return {score: score, endrun: endrun};
+}
+
 window.onload = function(){
+    console.log('WINDOW ON LOAD');
     const policy_net = tf.sequential();
     policy_net.add(tf.layers.conv2d({inputShape: [H/2, W, 3],
                                     name: 'conv2d_1',
@@ -219,26 +264,39 @@ window.onload = function(){
     }
     else {
         // BIG ML LOOP
+        var timesteps_history = [];
+        var px_history = [];
+        var py_history = [];
         for (var eps = 0; eps < episodes; eps += 1) {
-            game_reset();
-            var imgForTensor = ctx2.getImageData(0, horiz, W, H-horiz)
-            var tensor = tf.browser.fromPixels(imgForTensor);
-            var state = tf.reshape(tensor, [-1, horiz, W, 3]);
-            for (var timestep=0; timestep < 3; timestep++) {
+            console.log(' ');
+            console.log(' ');
+            console.log('                NEW GAME              ');
+            game_reset()
+            var endrun = 0;
+            var reward = 0;
+            var state = get_state();
+            for (var timestep=0; timestep < max_timesteps; timestep++) {
                 var action = agent.select_action(state, policy_net);
-                console.log(action);
-                if (action == 0) {
-                    ang -= Math.PI / turn_pi_frac;
+                do_the_thing(action); // Take action
+                gameloop(); // Run the timestep through super physics
+                let {reward, endrun} = carrot_stick(action);
+                draw_car(px, py, ang);
+                px_history.push(px);
+                py_history.push(py);
+                if (endrun == 1) {
+                    console.log('            GAME OVER MAN GAME OVER');
+                    timesteps_history.push(timestep);
+                    draw_drive(px_history, py_history);
+                    break;
                 }
-                else if (action == 2) {
-                    ang += Math.PI / turn_pi_frac;
-                }
-                gameloop();
-                // rewards from action?
+                console.log('timestep = ', timestep);
+                var reward_tensor = tf.tensor([reward]);
                 // train
             }
         }
     }
+    console.log('===========OVER==============');
+    console.log('timesteps_history = ', timesteps_history);
 };
 
 function gameloop() {
@@ -262,6 +320,9 @@ function gameloop() {
     px = px + vx;
     py = py + vy;
     draw();
+    if (ML == false) { // Draw car now since it wont hurt carrot_stick
+        draw_car(px, py, ang);
+    }
 
     // Check State
 
@@ -272,11 +333,7 @@ function gameloop() {
     // Update weights idk
 }
 
-function draw() {
-    
-    ctx.drawImage(track, 0, 0);
-    //draw_fov();
-
+function draw_car(px, py, ang) {
     // Placeholder Car
     ctx.strokeStyle = 'magenta';
     ctx.lineWidth = 8;
@@ -284,6 +341,28 @@ function draw() {
     ctx.moveTo(px-10*Math.cos(ang), py-10*Math.sin(ang));
     ctx.lineTo(px+10*Math.cos(ang), py+10*Math.sin(ang));
     ctx.stroke();
+}
+
+function draw_drive(px_history, py_history) {
+    ctx.strokeStyle = 'magenta';
+    ctx.lineWidth = 2;
+    ctx.moveTo(px_history[0], py_history[0]);
+    for (var i = 1; i < px_history.length; i++) {
+        if (Math.abs(px_history[i]-px_history[i-1]) > 10 || Math.abs(py_history[i]-py_history[i-1]) > 10) {
+            ctx.stroke();
+            ctx.moveTo(px_history[i], py_history[i]);
+        }
+        ctx.lineTo(px_history[i], py_history[i]);
+    }
+    ctx.stroke();
+}
+
+function draw() {
+    
+    ctx.drawImage(track, 0, 0);
+    //draw_fov();
+
+    
 
     /* TINY TOP VIEW */
     /*
