@@ -8,6 +8,91 @@ TODO
     Background, like far away hills etc
     Reduce distortion, straight lines right next to the car seem to curve
 */
+
+// https://www.youtube.com/watch?v=PyQNfsGUnQA
+class ReplayMemory {
+    constructor(capacity) {
+        this.capacity = capacity;
+        this.memory = [];
+        this.push_count = 0;
+    }
+
+    push(experience) {
+        if(this.memory.length < this.capacity){
+            this.memory.unshift(experience);
+        }
+        else {
+            this.memory.pop();
+            this.memory.unshift(experience);
+        }
+        this.push_count += 1;
+    }
+
+    // https://stackoverflow.com/questions/11935175/sampling-a-random-subset-from-an-array
+    get_rand_memory(arr, size) {
+        var shuffled = arr.slice(0), i = arr.length, min = i - size, temp, index;
+        while (i-- > min) {
+            index = Math.floor((i + 1) * Math.random());
+            temp = shuffled[index];
+            shuffled[index] = shuffled[i];
+            shuffled[i] = temp;
+        }
+        return shuffled.slice(min);
+    }
+
+    can_provide_sample(batch_size) {
+        return self.memory.length >= batch_size;
+    }
+}
+
+// //https://www.youtube.com/watch?v=PyQNfsGUnQA
+class Experience {
+    constructor() {
+        this.state = 'state';
+        this.action = 'action';
+        this.next_state = 'next_state';
+        this.reward = 'reward';
+    }
+}
+
+// //https://www.youtube.com/watch?v=PyQNfsGUnQA
+class EpsGreedyStrat {
+    constructor(start, end, decay) {
+        this.start = start;
+        this.end = end;
+        this.decay = decay;
+    }
+
+    get_exploration_rate(current_step) {
+        var expl_val = this.start - current_step * this.decay;
+        if (expl_val < this.end) {
+            expl_val = this.end;
+        }
+        return expl_val;
+    }
+}
+
+// //https://www.youtube.com/watch?v=PyQNfsGUnQA
+class Agent {
+    constructor(strategy, num_actions) {
+        this.current_step = 0;
+        this.strategy = strategy;
+        this.num_actions = num_actions
+    }
+
+    select_action(state, policy_net) {
+        // policy net is the name of the deep neural net
+        var rate = this.strategy.get_exploration_rate(this.current_step);
+        this.current_step += 1;
+        if (rate > Math.random()) { // Explore
+            return Math.floor(3*Math.random());
+        }
+        else { // Exploit
+            return policy_net.predict(state).argMax(-1).dataSync()[0];
+        }
+    }
+}
+
 console.clear();
 var canv = document.getElementById("myCanvas");
 canv.setAttribute('tabindex', '0')
@@ -30,13 +115,14 @@ track.onload = function(){
 
 const W = 640; // canv.style.width;
 const H = 480; // canv.style.height;
+var horiz = H/2; // Horizon y height in canvas
 var log_vars = 0;
 
 /*
-PHYSICS CONSTANTS
+PHYSICS CONSTANTS==================================================================
 */
+const ML = true;
 var fps = 15; // Frames Per Second
-setInterval(gameloop, 1000/fps);
 var turn_pi_frac = 20; // ang += Math.PI / turn_pi_frac
 var accel = 0.5;       // Acceleration
 var brake = 2.0;       // Braking
@@ -44,8 +130,8 @@ var maxv = 5.0;        // Max Velocity
 var drag = 0.15;       // Drag
 
 if (circuit == 1) {
-    var px = 308; // Initial Position X
-    var py = 380; // Initial Position Y
+    var px = 297; // Initial Position X
+    var py = 376; // Initial Position Y
     var ang = 0;  // Initial Angle (Radians)
 }
 else {
@@ -55,7 +141,12 @@ else {
 }
 var vx = 0;       // Initial Velocity X
 var vy = 0;       // Initial Velocity Y
-var v = 0;        // Initial Velocity Magnitude
+if (ML) {
+    var v = maxv;     // Initial Velocity Magnitude
+}
+else {
+    var v = 0;        // Initial Velocity Magnitude
+}
 var vang = 0;     // Initial Velocity Angle
 var throttle = 0; // Initial Throttle Boolean False
 
@@ -66,6 +157,89 @@ const fovh = fov / 2.0;     // Half the field of view
 const farwidth = far * Math.sin(fov);
 const height = 20;
 ctx.drawImage(track, 0, 0);
+
+/*
+ML ==========================================================================
+*/
+var batch_size = 256;
+var lr = 0.001;
+var expl_rate_start = 0.5;
+var expl_rate_end = 0.01;
+var expl_rate_decay = 0.01;
+var episodes = 3;
+var num_actions = 3;
+var memory_size = 10;
+var strategy = new EpsGreedyStrat(expl_rate_start, expl_rate_end, expl_rate_decay);
+var agent = new Agent(strategy, num_actions);
+var memory = new ReplayMemory(memory_size);
+
+function game_reset() {
+    if (circuit == 1) {
+        var px = 297; // Initial Position X
+        var py = 376; // Initial Position Y
+        var ang = 0;  // Initial Angle (Radians)
+    }
+    else {
+        var px = W/2; // Initial Position X
+        var py = H/2; // Initial Position Y
+        var ang = 0;  // Initial Angle (Radians)
+    }
+    var vx = 0;       // Initial Velocity X
+    var vy = 0;       // Initial Velocity Y
+    if (ML) {
+        var v = maxv;     // Initial Velocity Magnitude
+    }
+    else {
+        var v = 0;        // Initial Velocity Magnitude
+    }
+    var vang = 0;     // Initial Velocity Angle
+    var throttle = 0; // Initial Throttle Boolean False
+}
+
+window.onload = function(){
+    const policy_net = tf.sequential();
+    policy_net.add(tf.layers.conv2d({inputShape: [H/2, W, 3],
+                                    name: 'conv2d_1',
+                                    filters: 7,
+                                    kernelSize: 7,
+                                    padding: 'same',
+                                    activation: 'relu'}));
+    policy_net.add(tf.layers.flatten());
+    policy_net.add(tf.layers.dense({name: 'dense_1',
+                                    units: 128,
+                                    kernelInitializer: 'glorotNormal',
+                                    activation: 'relu'}));
+    policy_net.add(tf.layers.dense({name: 'dense_2',
+                                    units: 3,
+                                    kernelInitializer: 'glorotNormal',
+                                    activation: 'softmax'}));
+    var target_net = policy_net; // This isn't for training this is for evaluating
+    if (ML == false) {
+        setInterval(gameloop, 1000/fps);
+    }
+    else {
+        // BIG ML LOOP
+        for (var eps = 0; eps < episodes; eps += 1) {
+            game_reset();
+            var imgForTensor = ctx2.getImageData(0, horiz, W, H-horiz)
+            var tensor = tf.browser.fromPixels(imgForTensor);
+            var state = tf.reshape(tensor, [-1, horiz, W, 3]);
+            for (var timestep=0; timestep < 3; timestep++) {
+                var action = agent.select_action(state, policy_net);
+                console.log(action);
+                if (action == 0) {
+                    ang -= Math.PI / turn_pi_frac;
+                }
+                else if (action == 2) {
+                    ang += Math.PI / turn_pi_frac;
+                }
+                gameloop();
+                // rewards from action?
+                // train
+            }
+        }
+    }
+};
 
 function gameloop() {
     if (v > maxv) { // Don't exceed max speed
@@ -80,11 +254,22 @@ function gameloop() {
     if (v < 0) { // No reverse currently
         v = 0;
     }
+    if (ML) {
+        v = maxv;
+    }
     vx = v * Math.cos(ang); // Update velocities and positions
     vy = v * Math.sin(ang);
     px = px + vx;
     py = py + vy;
     draw();
+
+    // Check State
+
+    // Kill
+
+    // Give Rewards
+
+    // Update weights idk
 }
 
 function draw() {
@@ -115,7 +300,6 @@ function draw() {
     var topDown = ctx.getImageData(0, 0, W, H);
     // Mode 7 like algorithm
     // http://coranac.com/tonc/text/mode7.htm
-    var horiz = H/2; // Horizon y height in canvas
     for (var i = 4*W*(horiz); i < topDown.data.length; i += 4) {
         var imgy = Math.floor(i/(4*W)); // Image Plane Y Coordinate. 4 bytes per pixel. w pixels wide. Increment Y
         var imgx = Math.floor((i/4)%W)-(W/2); // Imag Plane X Coord. 4 bytes/pix. w pix wide. 0 at center not at left
@@ -167,6 +351,8 @@ function draw() {
     //ctx2.rect(0, 0, W, h/2+8);
     //ctx2.fillStyle = '#4488FF';
     //ctx2.fill()
+
+    // TODO Difference between this img and last img to only show changed pixels
 }
 
 function keypress(evt) {
