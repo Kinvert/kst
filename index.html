@@ -2,12 +2,23 @@
 <html>
   <head>
     <script type="module" src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@2.0.0/dist/tf.min.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="jquery-3.6.0.min.js"></script>
   </head>
   <body>
     <canvas id='myCanvas' width='640' height='480' tabindex='0'>Stop Using Internet Explorer</canvas>
+    <div id="score_history"></div>
     <canvas id='myCanvas2' width='640' height='480' tabindex='1'>Stop Using Internet Explorer</canvas>
+    <p>W or up= Gas</p>
+    <p>S or down = Brake</p>
+    <p>A or left = Left</p>
+    <p>D or right = Right</p>
+    <p>ML Not working yet, so I left this in a driveable state</p>
+    <p>The struggle is the loss function, and passing those gradients</p>
+    <p>Don't tell anyone, but I don't like Javascript</p>
     <!-- 75 x 60 for old top down view canvas -->
     <script type='module' src='mode7.js'></script>
     <script type='text/javascript' src='index.js'></script>
+    <script type='text/javascript' src='drawcharts.js'></script>
   </body>
 </html>

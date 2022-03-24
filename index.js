@@ -1,5 +1,8 @@
 /*
 TODO
+    Get it to actually converge
+    Multiple vehicles at one time
+    Fix memory leak
     Grayscale noise to create hills
     Better comments to document code
     How to handle edge of map - probably just fill green
@@ -8,10 +11,14 @@ TODO
     Background, like far away hills etc
     Reduce distortion, straight lines right next to the car seem to curve
     https://deeplizard.com/learn/video/ewRw996uevN
+
+    BELLMAN
+        https://stackoverflow.com/questions/51230542/bellmans-equations-loss-in-tfjs
 */
 
-const ML = true;
-const ISOMETRIC = false;
+const ML = false;
+const ISOMETRIC = true;
+const WHISKERS = false;
 //const whisker_angles = [-Math.PI/2, -Math.PI/3, -Math.PI/4, -Math.PI/6, 0,
 //                        Math.PI/6, Math.PI/4, Math.PI/3, Math.PI/2];
 const whisker_angles = [-Math.PI/4, -Math.PI/6, 0,
@@ -23,6 +30,7 @@ var expl_rate_start = 1;
 var expl_rate_end = 0.25;
 var expl_rate_decay = 0.01;
 var gamma = 0.99;
+var discountRate = 0.99;
 var episodes = 10;
 var max_timesteps = 400;
 var num_actions = 3;
@@ -71,11 +79,12 @@ class ReplayMemory {
 
 // //https://www.youtube.com/watch?v=PyQNfsGUnQA
 class Experience {
-    constructor(state, action, next_state, reward) {
+    constructor(state, action, next_state, reward, endrun) {
         this.state = state;
         this.action = action;
         this.next_state = next_state;
         this.reward = reward;
+        this.endrun = endrun;
     }
 }
 
@@ -122,23 +131,12 @@ class Agent {
     }
 }
 
-/*
-function extract_tensors(experiences) {
-    // https://youtu.be/ewRw996uevM?t=607
-    console.log(experiences);
-    //batch = Experience(*zip(*experiences))
-
-    states = torch.cat(batch.state)
-    actions = torch.cat(batch.action)
-    rewards = torch.cat(batch.reward)
-    next_states = torch.cat(batch.next_state)
-
-    return {states: states, actions: actions, rewards: rewards, next_states: next_states}
-}
-*/
-
 class QValues {
-    // https://youtu.be/ewRw996uevM?t=730
+    // https://youtu.be/ewRw996uevM?t=718
+    constructor() {
+        console.log('QValues');
+    }
+    
     //device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     //staticmethod
@@ -194,7 +192,12 @@ var fps = 15; // Frames Per Second
 var turn_pi_frac = 20; // ang += Math.PI / turn_pi_frac
 var accel = 0.5;       // Acceleration
 var brake = 2.0;       // Braking
-var maxv = 5.0;        // Max Velocity
+if (ML == true) {
+    var maxv = 5.0; // Max Velocity
+}
+else {
+    var maxv = 7.0; // Max Velocity
+}      
 var drag = 0.15;       // Drag
 
 if (circuit == 1) {
@@ -235,9 +238,7 @@ var memory = new ReplayMemory(memory_size);
 
 function game_reset() {
     if (circuit == 1) {
-        px = 330; // Initial Position X
-        py = 376; // Initial Position Y
-        ang = 0;  // Initial Angle (Radians)
+        get_random_start();
     }
     else {
         px = W/2; // Initial Position X
@@ -297,6 +298,7 @@ function get_whisker_ends(px, py, ang) {
                 break;
             }
         }
+        l = l / max_whisker_length;
         whisker_lengths.push(l);
         whisker_ends.push(Math.floor(whisker_x));
         whisker_ends.push(Math.floor(whisker_y));
@@ -376,10 +378,32 @@ function carrot_stick(px, py, action) {
     return score;
 }
 
+function get_random_start() {
+    if (circuit == 1){
+        var choices = [];
+        // Xmin, Ymin, Xmax, Ymax, Angle
+        choices.push([330, 360, 475, 395, 0]);
+        choices.push([490, 350, 520, 370, -Math.PI/4.0]);
+        choices.push([490, 125, 530, 345, -Math.PI/2.0]);
+        var ch = Math.floor(choices.length*Math.random());
+        px = Math.floor(Math.random() * (choices[ch][2] - choices[ch][0] + 1)) + choices[ch][0];
+        py = Math.floor(Math.random() * (choices[ch][3] - choices[ch][1] + 1)) + choices[ch][1];
+        ang = Math.PI/3 * Math.random() - Math.PI/6 + choices[ch][4];
+    }
+}
 
+function pushGradients(record, gradients) {
+    // https://github.com/tensorflow/tfjs-examples/blob/f4b036afbb0f61979da0bfa2dc4a41ceb7d60838/cart-pole/index.js#L237
+    for (const key in gradients) {
+        if (key in record) {
+            record[key].push(gradients[key]);
+        } else {
+            record[key] = [gradients[key]];
+        }
+    }
+}
 
 window.onload = function(){
-    console.log('WINDOW ON LOAD');
     const policyNet = tf.sequential();
     //policyNet.add(tf.layers.conv2d({inputShape: [H/2, W, 3], // FROM IMAGES
     /*
@@ -406,6 +430,7 @@ window.onload = function(){
                                     activation: 'softmax'}));
     var targetNet = policyNet; // This isn't for training this is for evaluating
     targetNet.trainable = false;
+    // https://stackoverflow.com/questions/48460057/what-does-it-mean-that-a-tf-variable-is-trainable-in-tensorflow/48460190
     policyNet.trainable = true;
     var optimizer = tf.train.adam(lr);
 
@@ -428,6 +453,7 @@ window.onload = function(){
         var allRewards = [];
         var allGameScores = [];
         var cumulativeReward = 0;
+        var gameSteps = [];
         for (var eps = 0; eps < episodes; eps += 1) {
             console.log(' ');
             console.log(' ');
@@ -438,12 +464,12 @@ window.onload = function(){
             //agent.reset_steps();
             var endrun = 0;
             var new_reward = 0;
-            const gameGradients = [];
-            const gameRewards = [];
+            const gameRewards = []; // 120
+            const gameGradients = []; // 121
             var old_state = get_state(px, py, ang);
             var new_state = old_state;
             cumulativeReward = 0;
-            for (var timestep=0; timestep < max_timesteps; timestep++) {
+            for (var timestep=0; timestep < max_timesteps; timestep++) { // 122
                 var old_state_tensor = make_state_tensor(old_state);
                 var action = agent.select_action(tf.tensor2d([old_state]), policyNet);
                 do_the_thing(action); // Take action
@@ -455,95 +481,125 @@ window.onload = function(){
                 if (new_reward == -1) {
                     endrun = 1;
                 }
-                allRewards.push(new_reward);
-                gameRewards.push(new_reward);
+                gameRewards.push(new_reward); // 146
                 px_history.push(px);
                 py_history.push(py);
-                var new_reward_tensor = tf.tensor([new_reward]);
+                //var new_reward_tensor = tf.tensor([new_reward]);
                 var experience = new Experience(old_state,
                                                 action,
                                                 new_state,
-                                                new_reward_tensor,
+                                                new_reward,
                                                 endrun);
                 memory.push(experience);
                 cumulativeReward += new_reward;
+
                 if (memory.can_provide_sample(batch_size)) {
-                    var experiences = memory.get_rand_memory(batch_size);
+                    var experiences = memory.get_rand_memory(batch_size); // https://youtu.be/ewRw996uevM?t=348
+
+                    // https://youtu.be/ewRw996uevM?t=352
                     var batch_states = [];
                     var batch_actions = [];
-                    //var batch_next_states = [];
-                    //var batch_old_rewards = [];
+                    var batch_next_states = [];
+                    var batch_old_rewards = [];
                     //var batch_new_rewards = [];
-                    //var batch_endruns = [];
+                    var batch_endruns = [];
                     for (var idx = 0; idx < experiences.length; idx++) {
                         batch_states.push(experiences[idx].state);
                         batch_actions.push(parseInt(experiences[idx].action));
-                        //batch_next_states.push(experiences[idx].next_state);
-                        //batch_old_rewards.push(experiences[idx].old_reward);
+                        batch_next_states.push(experiences[idx].next_state);
+                        batch_old_rewards.push(experiences[idx].reward);
                         //batch_new_rewards.push(experiences[idx].new_reward);
-                        //batch_endruns.push(experiences[idx].endrun);
+                        batch_endruns.push(experiences[idx].endrun);
                     }
-                    const stateTensor = tf.tensor2d(batch_states);
+                    const inputTensor = tf.tensor2d(batch_states);
                     const actionTensor = tf.tensor1d(batch_actions).toInt();
-                    //const nextStateTensor = tf.tensor2d(batch_next_states);
-                    //const oldRewardTensor = tf.tensor1d(batch_old_rewards);
+                    const nextStateTensor = tf.tensor2d(batch_next_states);
+                    const oldRewardTensor = tf.tensor1d(batch_old_rewards);
                     //const newRewardTensor = tf.tensor1d(batch_new_rewards);
-                    //const endrunTensor = tf.tensor1d(batch_endruns);
+                    const endrunTensor = tf.tensor1d(batch_endruns);
+
 
                     // Pseudo Code - https://youtu.be/PyQNfsGUnQA?t=40
                     // Output Q Values... I guess?
-                    //const currentQTensor = policyNet.predict(stateTensor);
+
+                    // https://youtu.be/ewRw996uevM?t=377
+                    // policy_net(states).gather(dim=1, index=actions.unsqueeze(-1))
+                    const currentQTensor = policyNet.predict(inputTensor); // Also needs actions?
 
                     
                     
 
-                    // https://youtu.be/ewRw996uevM?t=829
+                    // https://youtu.be/ewRw996uevM?t=785
                     // Get final states, basically the game over states
-                    /*
-                    final_states = [];
-                    final_state_locations = [];
-                    non_final_states = [];
-                    non_final_state_locations = [];
-                    for (var b = 0; b < batch_size; b++) {
-                        if (batch_endruns[b] == 1) {
-                            final_states.push(batch_next_states[b]);
+                    // For each next state we want the max q value predicted by target net
+                    //    among all possible next actions
+                    final_states = []; // if an episode is ended by a given action then we call the next
+                                        //state that occurs after that action was taken the final state
+                                        // We dont want to pass these to targetNet
+                    var final_state_locations = [];
+                    var non_final_states = []; // https://youtu.be/ewRw996uevM?t=937
+                    var non_final_state_locations = [];
+                    for (var i = 0; i < batch_size; i++) {
+                        if (batch_endruns[i] == 1) {
+                            final_states.push(batch_next_states[i]);
                             final_state_locations.push(1);
-                            non_final_state_locations.push(0);
+                            non_final_state_locations.push(0); // https://youtu.be/ewRw996uevM?t=937
                         }
                         else {
-                            non_final_states.push(batch_next_states[b]);
+                            non_final_states.push(batch_next_states[i]);
                             final_state_locations.push(0);
-                            non_final_state_locations.push(1);
+                            non_final_state_locations.push(1); // https://youtu.be/ewRw996uevM?t=937
                         }
                     }
-                    */
-                    //var values = tf.tensor(new Array(batch_size).fill(0));
-                    //values[non_final_state_locations] = target_net(non_final_states).max(dim=1)[0].detach()
-
-
-
-
-
-
-
+                    const nonFinalStatesTensor = tf.tensor2d(non_final_states); // https://youtu.be/ewRw996uevM?t=937
+                    var values = tf.tensor(new Array(batch_size).fill(0));
+                    values[non_final_state_locations] = targetNet.predict(nonFinalStatesTensor)
+                        //.max(dim=1)[0].detach();
 
                     // Get Target Q Values... I guess?
-                    //const nextMaxQTensor = targetNet.predict(nextStateTensor).max(-1);
                     
-                    //const qs = policyNet.apply(stateTensor, {training: true})
-                    //    .mul(tf.oneHot(actionTensor, num_actions)).sum(-1);
 
 
                     // https://youtu.be/ewRw996uevM?t=478
-                    //current_q_values = QValues.get_current(policyNet, states, actions)
-                    //next_q_values = QValues.get_next(target_net, next_states)
-                    //target_q_values = (next_q_values * gamma) + rewards
+                    //current_q_values = QValues.get_current(policyNet, batch_states, batch_actions);
+                    // https://youtu.be/ewRw996uevM?t=753
+                    
+                    //next_q_values = QValues.get_next(targetNet, batch_next_states);
+                    // https://youtu.be/ewRw996uevM?t=781
+                    
+                    //target_q_values = (next_q_values * gamma) + rewards;
+                    //target_q_values = (next_q_values * gamma) + oldRewardTensor; // batch_old_rewards
+                    
                         //q*(s,a)=E[Rt+1+gamma max q* (s', a')]
 
-                    //loss = F.mse_loss(current_q_values, target_q_values.unsqueeze(1))
-                    //optimizer.zero_grad() make sure to zero out gradients so you dont sum up
-                    //loss.backward()
-                    //optimizer.step()
+                    //loss = F.mse_loss(current_q_values, target_q_values.unsqueeze(1));
+                    //optimizer.zero_grad(); // make sure to zero out gradients so you dont sum up
+                    //loss.backward();
+                    //optimizer.step();
+                    //optimizer.applyGradients(
+                        //scaleAndAverageGradients(allGradients, normalizedRewards));
+                    function getGradientsAndSaveActions() {
+                        // https://github.com/tensorflow/tfjs-examples/blob/f4b036afbb0f61979da0bfa2dc4a41ceb7d60838/cart-pole/index.js#L181
+                        const f = () => tf.tidy(() => {
+                            const nextMaxQTensor = targetNet.predict(nextStateTensor).max(-1);
+                    
+                            const qs = policyNet.apply(inputTensor, {training: true})
+                                .mul(tf.oneHot(actionTensor, num_actions)).sum(-1);
+                            current_q_values = values;
+                            next_q_values = values;
+                            target_q_values = next_q_values.mul(gamma).add(oldRewardTensor);
+                            loss = tf.losses.meanSquaredError(current_q_values, target_q_values);
+                            return loss;
+                        });
+                        var varGrads = tf.variableGrads(f);
+                        return varGrads;
+                    }
+                    optimizer.applyGradients(getGradientsAndSaveActions());
+
+
+
+
+
 
                     //if em.done
                         //episode_durations.append(timestep)
@@ -606,43 +662,6 @@ window.onload = function(){
 
 
 
-                    // CARTPOLE METHOD
-                    //var one_hot_prep = [];
-                    //for (var i = 0; i < batch_size; i++) {
-                    //    one_hot_prep.push(make_action_one_hot(batch_actions[i]));
-                    //}
-                    //var one_hot_tensor = tf.tensor2d(one_hot_prep);
-
-                    function getGradientsAndSaveActions(sT) {
-                        const f = () => tf.tidy(() => {
-
-                            const logits = policyNet.predict(sT);
-
-                            const actions_one_hot = tf.oneHot(actionTensor, 3);
-                            this.currentActions = actions_one_hot.dataSync();
-  
-                            var labels = tf.sub(1,
-                                tf.tensor2d(this.currentActions, actions_one_hot.shape));
-
-                            var loss = tf.losses.sigmoidCrossEntropy(labels, logits).asScalar();
-                            return loss;
-                        });
-                        //const {vValue, vGrads} = tf.variableGrads(f);
-                        var varGrads = tf.variableGrads(f);
-                        return varGrads;
-                    }
-
-                    const gradients = tf.tidy(() => { // https://github.com/tensorflow/tfjs-examples/blob/master/cart-pole/index.js#L126
-                        return getGradientsAndSaveActions(stateTensor);
-                    });
-                    // https://github.com/tensorflow/tfjs-examples/blob/master/cart-pole/index.js#L131
-                    var asdf = gradients;
-                    optimizer.applyGradients(asdf.grads);
-                   //END CARTPOLE
-
-
-
-
                     // For Standfords Version: https://youtu.be/lvoHnicueoE?t=1551
                     // https://towardsdatascience.com/practical-guide-for-dqn-3b70b1d759bf
 
@@ -669,16 +688,34 @@ window.onload = function(){
                     console.log('            GAME OVER MAN GAME OVER');
                     timesteps_history.push(timestep);
                     allGameScores.push(cumulativeReward);
+                    allRewards.push(gameRewards);
                     //draw_drive(px_history, py_history);
                     break;
                 }
-            }
-        }
+            } // End of Timesteps
+            gameSteps.push(gameRewards.length);
+            pushGradients(allGradients, gameGradients);
+            allRewards.push(gameRewards);
+        } // End of Episodes
     }
     console.log('===========OVER==============');
     console.log('timesteps_history = ', timesteps_history);
     console.log('scores = ', allGameScores);
     draw_drive(px_history, py_history);
+    /*
+    // Saves the model
+    if (Math.max(...timesteps_history) > 100) {
+        async function asyncSave() {
+            console.log('trying to save');
+            const saveResults = await policyNet.save("downloads://my-model-1");
+            console.log('after save');
+        }
+        asyncSave();
+    }
+    else {
+        console.log('no big runs');
+    }
+    */
 };
 
 function gameloop() {
@@ -705,7 +742,9 @@ function gameloop() {
     if (ML == false) { // Draw car now since it wont hurt carrot_stick
         draw();
         draw_car(px, py, ang);
-        draw_whiskers(get_state(px, py, ang));
+        if (WHISKERS == true) {
+            draw_whiskers(get_state(px, py, ang));
+        }
     }
 
     // Check State
