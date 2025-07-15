@@ -26,6 +26,17 @@ class EpsGreedyStrat {
     }
 }
 
+// //https://www.youtube.com/watch?v=PyQNfsGUnQA
+class Experience {
+    constructor(state, action, next_state, reward, endrun) {
+        this.state = state;
+        this.action = action;
+        this.next_state = next_state;
+        this.reward = reward;
+        this.endrun = endrun;
+    }
+}
+
 // https://www.youtube.com/watch?v=PyQNfsGUnQA
 class ReplayMemory {
     constructor(capacity) {
@@ -65,6 +76,58 @@ class ReplayMemory {
     num_memories() {
         return this.memory.length;
     }
+}
+
+// //https://www.youtube.com/watch?v=PyQNfsGUnQA
+class Agent {
+    constructor(strategy, num_actions) {
+        this.current_step = 0;
+        this.strategy = strategy;
+        this.num_actions = num_actions
+    }
+
+    select_action(state, policyNet) {
+        // policy net is the name of the deep neural net
+        var rate = this.strategy.get_exploration_rate(this.current_step);
+        this.current_step += 1;
+        if (rate > Math.random()) { // Explore
+            return Math.floor(3*Math.random());
+        }
+        else { // Exploit
+            // https://github.com/tensorflow/tfjs-examples/blob/master/snake-dqn/agent.js#L95
+            return policyNet.predict(state).argMax(-1).dataSync()[0];
+        }
+    }
+
+    reset_steps() {
+        this.current_step = 0;
+    }
+}
+
+class QValues {
+    // https://youtu.be/ewRw996uevM?t=718
+    constructor() {
+        console.log('QValues');
+    }
+    
+    //device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    //staticmethod
+    //get_current(policyNet, states, actions) {
+        //return policyNet(states).gather(dim=1, index=actions.unqueeze(-1));
+    //}
+    /*
+    get_next(target_net, next_states) {
+        final_state_locations = next_states.flatten(start_dim=1)
+            .max(dim=1)[0].eq(0).type(torch.bool)
+        non_final_state_locations = (final_state_locations == false)
+        non_final_states = next_states[non_final_state_locations]
+        batch_size = next_states.shape[0]
+        values = torch.zeros(batch_size).to(QValues.device)
+        values[non_final_state_locations] = target_net(non_final_states).max(dim=1)[0].detach()
+        return values
+    }
+    */
 }
 
 /*
