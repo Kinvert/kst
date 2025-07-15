@@ -160,11 +160,9 @@ class QValues {
 console.clear();
 var canv = document.getElementById("myCanvas");
 canv.setAttribute('tabindex', '0')
-canv.focus()
 var ctx = canv.getContext("2d");
 var canv2 = document.getElementById("myCanvas2");
 canv2.setAttribute('tabindex', '1')
-canv2.focus()
 var ctx2 = canv2.getContext("2d");
 
 document.addEventListener("keydown", keypress);
