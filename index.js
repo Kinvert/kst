@@ -360,7 +360,7 @@ function carrot_stick(px, py, action) {
     else if (red > 230 && green < 20 && blue < 20) {
         score += 0.05; // RED hitting racing line
     }
-    if ( action == 0 && action == 2) {
+    if ( action == 0 || action == 2) {
         score -= 0.01; // Penalize many turns
     }
     score -= 0.001; // make them want to drive as fast as possible
