@@ -291,7 +291,7 @@ function get_whisker_ends(px, py, ang) {
             var red = color.data[0];
             var green = color.data[1];
             var blue = color.data[2];
-            if (red = 69 && green == 142 && blue > 49 && blue < 55) {
+            if (red == 69 && green == 142 && blue > 49 && blue < 55) {
                 hit_green = true;
                 break;
             }
