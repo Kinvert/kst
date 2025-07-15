@@ -19,8 +19,6 @@ TODO
 const ML = false;
 const ISOMETRIC = true;
 const WHISKERS = false;
-//const whisker_angles = [-Math.PI/2, -Math.PI/3, -Math.PI/4, -Math.PI/6, 0,
-//                        Math.PI/6, Math.PI/4, Math.PI/3, Math.PI/2];
 const whisker_angles = [-Math.PI/4, -Math.PI/6, 0,
                         Math.PI/6, Math.PI/4];
 const max_whisker_length = 100; // 200
@@ -309,21 +307,7 @@ function make_state_tensor(state) {
 
 function get_state(px, py, ang) {
     var {whisker_lengths} = get_whisker_ends(px, py, ang);
-    //var tensor = tf.tensor([whisker_lengths]);
-    //return tf.reshape(tensor, [-1, whisker_angles.length, 1]);
-
     return whisker_lengths;
-
-    //var tensor = tf.tensor2d([whisker_lengths]);
-    //return tensor;
-}
-
-function get_state_old() {
-    /* This was for feeding in an image
-    var imgForTensor = ctx2.getImageData(0, horiz, W, H-horiz)
-    var tensor = tf.browser.fromPixels(imgForTensor);
-    return tf.reshape(tensor, [-1, horiz, W, 3]);
-    */
 }
 
 function make_action_one_hot(action) {
@@ -401,21 +385,12 @@ function pushGradients(record, gradients) {
 
 window.onload = function(){
     const policyNet = tf.sequential();
-    //policyNet.add(tf.layers.conv2d({inputShape: [H/2, W, 3], // FROM IMAGES
-    /*
-    //policyNet.add(tf.layers.conv1d({inputShape: [whisker_angles.length, 1], // WORKED BEFORE BATCH
-                                    name: 'conv1d_1',
-                                    filters: 25,
-                                    kernelSize: 5,
-                                    padding: 'same',
-                                    activation: 'relu'}));
-    */
+
     policyNet.add(tf.layers.dense({name: 'dense_0',
                                     inputShape: [whisker_angles.length],
                                     units: 8,
                                     kernelInitializer: 'glorotNormal',
                                     activation: 'relu'}));
-    //policyNet.add(tf.layers.flatten());
     policyNet.add(tf.layers.dense({name: 'dense_1',
                                     units: 8,
                                     kernelInitializer: 'glorotNormal',
@@ -424,7 +399,7 @@ window.onload = function(){
                                     units: 3,
                                     kernelInitializer: 'glorotNormal',
                                     activation: 'softmax'}));
-    var targetNet = policyNet; // This isn't for training this is for evaluating
+    var targetNet = policyNet;
     targetNet.trainable = false;
     // https://stackoverflow.com/questions/48460057/what-does-it-mean-that-a-tf-variable-is-trainable-in-tensorflow/48460190
     policyNet.trainable = true;
