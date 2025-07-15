@@ -251,8 +251,8 @@ function game_reset() {
     else {
         v = 0;        // Initial Velocity Magnitude
     }
-    var vang = 0;     // Initial Velocity Angle
-    var throttle = 0; // Initial Throttle Boolean False
+    vang = 0;     // Initial Velocity Angle
+    throttle = 0; // Initial Throttle Boolean False
 }
 
 function do_the_thing(action) {
