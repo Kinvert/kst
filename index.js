@@ -55,7 +55,7 @@ var fps = 15;
 var turn_pi_frac = 20; // ang += Math.PI / turn_pi_frac
 var accel = 0.5;
 var brake = 2.0;
-if (ML == true) {
+if (ML) {
     var maxv = 5.0;
 }
 else {
@@ -76,10 +76,10 @@ else {
 var vx = 0;
 var vy = 0;
 if (ML) {
-    var v = maxv;
+    v = maxv;
 }
 else {
-    var v = 0;
+    v = 0;
 }
 var vang = 0;
 var throttle = 0;
@@ -291,5 +291,9 @@ function keyrelease(evt) {
         case 38:
         case 87:
             throttle = 0;
+            break;
+        case 80:
+            log_vars = 1;
+            break;
     }
 }
