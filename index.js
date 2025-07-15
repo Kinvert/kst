@@ -176,46 +176,46 @@ track.onload = function(){
     draw();
 };
 
-const W = 640; // canv.style.width;
-const H = 480; // canv.style.height;
-var horiz = H/2; // Horizon y height in canvas
+const W = 640;
+const H = 480;
+var horiz = H/2;
 var log_vars = 0;
 
 /*
 PHYSICS CONSTANTS==================================================================
 */
-var fps = 15; // Frames Per Second
+var fps = 15;
 var turn_pi_frac = 20; // ang += Math.PI / turn_pi_frac
-var accel = 0.5;       // Acceleration
-var brake = 2.0;       // Braking
+var accel = 0.5;
+var brake = 2.0;
 if (ML == true) {
-    var maxv = 5.0; // Max Velocity
+    var maxv = 5.0;
 }
 else {
-    var maxv = 7.0; // Max Velocity
+    var maxv = 7.0;
 }      
-var drag = 0.15;       // Drag
+var drag = 0.15;
 
 if (circuit == 1) {
-    var px = 330; // Initial Position X
-    var py = 376; // Initial Position Y
-    var ang = 0;  // Initial Angle (Radians)
+    var px = 330;
+    var py = 376;
+    var ang = 0;
 }
 else {
-    var px = W/2; // Initial Position X
-    var py = H/2; // Initial Position Y
-    var ang = 0;  // Initial Angle (Radians)
+    var px = W/2;
+    var py = H/2;
+    var ang = 0;
 }
-var vx = 0;       // Initial Velocity X
-var vy = 0;       // Initial Velocity Y
+var vx = 0;
+var vy = 0;
 if (ML) {
-    var v = maxv;     // Initial Velocity Magnitude
+    var v = maxv;
 }
 else {
-    var v = 0;        // Initial Velocity Magnitude
+    var v = 0;
 }
-var vang = 0;     // Initial Velocity Angle
-var throttle = 0; // Initial Throttle Boolean False
+var vang = 0;
+var throttle = 0;
 
 const near = 10;            // Close end frustrum
 const far  = 75;            // Far end frustrum
@@ -237,20 +237,20 @@ function game_reset() {
         get_random_start();
     }
     else {
-        px = W/2; // Initial Position X
-        py = H/2; // Initial Position Y
-        ang = 0;  // Initial Angle (Radians)
+        px = W/2;
+        py = H/2;
+        ang = 0;
     }
-    vx = 0;       // Initial Velocity X
-    vy = 0;       // Initial Velocity Y
+    vx = 0;
+    vy = 0;
     if (ML) {
-        v = maxv;     // Initial Velocity Magnitude
+        v = maxv;
     }
     else {
-        v = 0;        // Initial Velocity Magnitude
+        v = 0;
     }
-    vang = 0;     // Initial Velocity Angle
-    throttle = 0; // Initial Throttle Boolean False
+    vang = 0;
+    throttle = 0;
 }
 
 function do_the_thing(action) {
@@ -434,13 +434,7 @@ window.onload = function(){
         setInterval(gameloop, 1000/fps);
     }
     else {
-        /*
-        ======================================================================================
-        ======================================================================================
-        ========================================BIG ML LOOP===================================
-        ======================================================================================
-        ======================================================================================
-        */
+        //========================================BIG ML LOOP===================================
         var timesteps_history = [];
         var px_history = [];
         var py_history = [];
@@ -715,16 +709,16 @@ window.onload = function(){
 };
 
 function gameloop() {
-    if (v > maxv) { // Don't exceed max speed
+    if (v > maxv) {
         v = maxv;
     }
-    if (ang > 2*Math.PI) { // Avoid very large angles
+    if (ang > 2*Math.PI) {
         ang = 0;
     }
-    if (throttle == 0 && v > 0) { // No throttle so coast to a stop
+    if (throttle == 0 && v > 0) {
         v -= drag;
     }
-    if (v < 0) { // No reverse currently
+    if (v < 0) {
         v = 0;
     }
     if (ML) {
