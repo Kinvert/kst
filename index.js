@@ -260,17 +260,6 @@ function do_the_thing(action) {
     }
 }
 
-function draw_whiskers() {
-    ctx.strokeStyle = 'magenta';
-    ctx.lineWidth = 2;
-    var {whisker_ends} = get_whisker_ends(px, py, ang);
-    for ( var ww = 0; ww < whisker_angles.length*2; ww += 2) {
-        ctx.moveTo(px, py);
-        ctx.lineTo(whisker_ends[ww], whisker_ends[ww+1]);
-        ctx.stroke();
-    }
-}
-
 function get_whisker_ends(px, py, ang) {
     var whisker_lengths = [];
     var whisker_ends = [];
