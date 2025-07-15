@@ -1,3 +1,31 @@
+var batch_size = 64;
+var lr = 0.1; // 0.01
+var expl_rate_start = 1;
+var expl_rate_end = 0.25;
+var expl_rate_decay = 0.01;
+var gamma = 0.99;
+var discountRate = 0.99;
+var episodes = 10;
+var max_timesteps = 400;
+var memory_size = 256; // replayBufferSize
+
+// //https://www.youtube.com/watch?v=PyQNfsGUnQA
+class EpsGreedyStrat {
+    constructor(start, end, decay) {
+        this.start = start;
+        this.end = end;
+        this.decay = decay;
+    }
+
+    get_exploration_rate(current_step) {
+        var expl_val = this.start - current_step * this.decay;
+        if (expl_val < this.end) {
+            expl_val = this.end;
+        }
+        return expl_val;
+    }
+}
+
 // https://www.youtube.com/watch?v=PyQNfsGUnQA
 class ReplayMemory {
     constructor(capacity) {

@@ -22,17 +22,7 @@ const WHISKERS = false;
 const whisker_angles = [-Math.PI/4, -Math.PI/6, 0,
                         Math.PI/6, Math.PI/4];
 const max_whisker_length = 100; // 200
-var batch_size = 64;
-var lr = 0.1; // 0.01
-var expl_rate_start = 1;
-var expl_rate_end = 0.25;
-var expl_rate_decay = 0.01;
-var gamma = 0.99;
-var discountRate = 0.99;
-var episodes = 10;
-var max_timesteps = 400;
 var num_actions = 3;
-var memory_size = 256; // replayBufferSize
 
 // //https://www.youtube.com/watch?v=PyQNfsGUnQA
 class Experience {
@@ -42,23 +32,6 @@ class Experience {
         this.next_state = next_state;
         this.reward = reward;
         this.endrun = endrun;
-    }
-}
-
-// //https://www.youtube.com/watch?v=PyQNfsGUnQA
-class EpsGreedyStrat {
-    constructor(start, end, decay) {
-        this.start = start;
-        this.end = end;
-        this.decay = decay;
-    }
-
-    get_exploration_rate(current_step) {
-        var expl_val = this.start - current_step * this.decay;
-        if (expl_val < this.end) {
-            expl_val = this.end;
-        }
-        return expl_val;
     }
 }
 
