@@ -166,9 +166,7 @@ var canv2 = document.getElementById("myCanvas2");
 canv2.setAttribute('tabindex', '1')
 canv2.focus()
 var ctx2 = canv2.getContext("2d");
-if (ISOMETRIC) {
-    var ctx2 = canv2.getContext("2d");
-}
+
 document.addEventListener("keydown", keypress);
 document.addEventListener("keyup", keyrelease);
 
