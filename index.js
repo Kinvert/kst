@@ -806,27 +806,15 @@ function draw_mode_7() {
         }
         
         if(xprime >= 0 && xprime <= W && yprime >= 0 && yprime <= H){
-            var idx = ((yprime * W) + xprime) * 4; // Get pixel index based on pixel (x,y)
-            perspective.data[i] = topDown.data[idx]; // Get color from original top view image
+            var idx = ((yprime * W) + xprime) * 4;
+            perspective.data[i] = topDown.data[idx];
             perspective.data[i+1] = topDown.data[idx+1];
             perspective.data[i+2] = topDown.data[idx+2];
             perspective.data[i+3] = topDown.data[idx+3];
-
-            // TOO SLOW
-            //var color = ctx.getImageData(xprime, yprime, 1, 1);
-            //perspective.data[i] = color.data[0];
-            //perspective.data[i+1] = color.data[1];
-            //perspective.data[i+2] = color.data[2];
-            //perspective.data[i+3] = color.data[3];
         }
     }
     log_vars = 0;
     ctx2.putImageData(perspective, 0, 0);
-    // Placeholder Sky
-    //ctx2.beginPath()
-    //ctx2.rect(0, 0, W, h/2+8);
-    //ctx2.fillStyle = '#4488FF';
-    //ctx2.fill()
 }
 
 function keypress(evt) {
