@@ -883,7 +883,7 @@ function keyrelease(evt) {
     switch(evt.keyCode) {
         case 38:
         case 87:
-            throttle = 0; // Coasting
+            throttle = 0;
     }
 }
 
